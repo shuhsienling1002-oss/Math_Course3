@@ -1,399 +1,443 @@
 import streamlit as st
 import random
-import math
-from fractions import Fraction
+import uuid
 from dataclasses import dataclass, field
-from typing import List, Tuple, Optional
+from typing import List, Dict
 
 # ==========================================
-# 1. 配置與 CSS (View Layer - UI/UX-CRF)
+# 0. 全局設定 (Global Config)
 # ==========================================
-st.set_page_config(page_title="分數拼湊大作戰 v2.0", page_icon="🧩", layout="centered")
+MAX_LEVEL = 5
 
-# 使用 提到的視覺層級與色彩心理學
+# ==========================================
+# 1. 核心配置與 CSS
+# ==========================================
+st.set_page_config(
+    page_title="整數大對決：歸零之戰",
+    page_icon="⚔️",
+    layout="centered"
+)
+
 st.markdown("""
 <style>
-    .stApp { background-color: #1e1e2e; color: #cdd6f4; }
+    /* 全局深色戰鬥風格 */
+    .stApp { background-color: #1a1b26; color: #a9b1d6; }
     
-    /* 遊戲容器 */
-    .game-container {
-        background: #313244;
-        border-radius: 16px;
-        padding: 24px;
-        border: 2px solid #45475a;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    }
-    
-    /* 分數視覺化 (圓餅圖) - 第一性原理 */
-    .pie-chart {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: conic-gradient(#89b4fa var(--p), #45475a 0);
-        display: inline-block;
-        vertical-align: middle;
-        margin-right: 8px;
-        border: 2px solid #cba6f7;
-    }
-    .pie-chart.negative {
-        background: conic-gradient(#f38ba8 var(--p), #45475a 0);
-        border-color: #f38ba8;
+    /* 頂部進度條 */
+    .stProgress > div > div > div > div {
+        background-color: #7aa2f7;
     }
 
-    /* 卡片樣式優化 */
-    div.stButton > button {
-        background-color: #cba6f7 !important;
-        color: #181825 !important;
-        border-radius: 12px !important;
-        font-size: 18px !important;
-        font-weight: bold !important;
-        height: auto !important;
-        padding: 10px 5px !important;
-        border: 2px solid transparent !important;
-    }
-    div.stButton > button:hover {
-        border-color: #f5c2e7 !important;
-        transform: translateY(-2px);
-    }
-    
-    /* 進度條與標記 */
-    .progress-track {
-        background: #45475a;
-        height: 30px;
-        border-radius: 15px;
-        position: relative;
-        overflow: hidden;
-        margin: 20px 0;
-        box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
-    }
-    .progress-fill {
-        height: 100%;
-        transition: width 0.5s ease-out;
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        padding-right: 10px;
-        font-size: 12px;
-        font-weight: bold;
-        color: #181825;
-    }
-    .fill-normal { background: linear-gradient(90deg, #89b4fa, #74c7ec); }
-    .fill-warning { background: linear-gradient(90deg, #f9e2af, #fab387); } /* 基礎比率預警 */
-    .fill-danger { background: linear-gradient(90deg, #f38ba8, #eba0ac); }
-    
-    .target-line {
-        position: absolute;
-        top: 0; bottom: 0;
-        width: 4px;
-        background: #a6e3a1;
-        z-index: 10;
-        box-shadow: 0 0 10px #a6e3a1;
-    }
-
-    /* 數學推導區 */
-    .math-log {
-        font-family: 'Courier New', monospace;
-        background: #181825;
+    /* 戰場容器 (Visualizer) */
+    .battlefield-box {
+        background: #24283b;
+        border: 2px solid #414868;
+        border-radius: 12px;
         padding: 15px;
+        margin: 15px 0;
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.6);
+        text-align: center;
+        min-height: 100px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* 粒子樣式 */
+    .particle {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        margin: 2px;
+        box-shadow: 0 0 5px rgba(255,255,255,0.3);
+        transition: all 0.3s ease;
+    }
+    .p-pos { background: #7aa2f7; border: 1px solid #3d59a1; } /* 藍色正數 */
+    .p-neg { background: #f7768e; border: 1px solid #db4b4b; } /* 紅色負數 */
+    .p-zero { background: #565f89; border: 1px dashed #a9b1d6; opacity: 0.3; } /* 抵銷後的灰燼 */
+
+    /* 卡牌按鈕 - 區分正負 */
+    div.stButton > button {
+        border-radius: 8px !important;
+        font-family: 'Courier New', monospace !important;
+        font-size: 1.2rem !important;
+        font-weight: bold !important;
+        border: none !important;
+        transition: transform 0.1s !important;
+        color: white !important;
+    }
+    div.stButton > button:active { transform: scale(0.95); }
+    
+    /* 正數卡樣式 (透過 Python 邏輯無法直接注入 class 到 button，需依賴文字內容辨識或統一風格) 
+       這裡我們使用統一風格，但依賴 emoji 區分
+    */
+    
+    /* 狀態提示框 */
+    .status-box {
+        padding: 12px;
         border-radius: 8px;
-        border-left: 4px solid #f9e2af;
-        margin-top: 10px;
+        text-align: center;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+    .status-neutral { background: rgba(122, 162, 247, 0.1); border: 1px solid #7aa2f7; color: #7aa2f7; }
+    .status-warn { background: rgba(224, 175, 104, 0.1); border: 1px solid #e0af68; color: #e0af68; }
+    .status-error { background: rgba(247, 118, 142, 0.1); border: 1px solid #f7768e; color: #f7768e; }
+    .status-success { background: rgba(158, 206, 106, 0.1); border: 1px solid #9ece6a; color: #9ece6a; }
+
+    /* 數學公式顯示 */
+    .math-display {
+        font-size: 1.5rem;
+        font-family: monospace;
+        color: #c0caf5;
+        background: #16161e;
+        padding: 10px;
+        border-radius: 6px;
+        border-left: 4px solid #bb9af7;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 數據模型 (Data Model)
+# 2. 領域模型 (Domain Model)
 # ==========================================
 
 @dataclass
-class Card:
-    numerator: int
-    denominator: int
-    id: int = field(default_factory=lambda: random.randint(10000, 99999))
+class IntegerCard:
+    value: int
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     @property
-    def value(self) -> Fraction:
-        return Fraction(self.numerator, self.denominator)
+    def is_positive(self) -> bool:
+        return self.value > 0
 
     @property
-    def is_negative(self) -> bool:
-        return self.numerator < 0
+    def display_text(self) -> str:
+        """按鈕顯示文字"""
+        if self.value > 0:
+            return f"🔵 +{self.value}"
+        else:
+            return f"🔴 {self.value}"
 
-    def get_visual_html(self) -> str:
-        """生成符合第一性原理的視覺化 HTML"""
-        # 計算圓餅圖百分比 (絕對值)
-        percent = abs(self.numerator / self.denominator) * 100
-        # 限制在 100% 以內避免圖形崩壞 (超過1的用滿圓表示)
-        percent_css = min(percent, 100)
-        
-        css_class = "pie-chart negative" if self.is_negative else "pie-chart"
-        sign_str = "-" if self.is_negative else "+"
-        # 使用 CSS 變量傳遞百分比
-        return f"""
-        <div style="display:flex; align-items:center; justify-content:center;">
-            <div class="{css_class}" style="--p: {percent_css}%;"></div>
-            <span>{self.numerator}/{self.denominator}</span>
-        </div>
+# ==========================================
+# 3. 戰鬥引擎 (Logic Layer)
+# ==========================================
+
+class BattleEngine:
+    
+    @staticmethod
+    def generate_level(level: int) -> dict:
         """
+        難度曲線設計：
+        L1: 純加法 (正數堆疊)
+        L2: 純減法 (負數堆疊)
+        L3: 歸零訓練 (正負抵銷) - 引入 Zero Pair 概念
+        L4: 目標控制 (混合運算)
+        L5: 精確打擊 (有限步數/大數字)
+        """
+        config = {
+            1: {'target': 5, 'range': [1, 2, 3], 'allow_neg': False, 'title': "能量填充 (正數加法)"},
+            2: {'target': -5, 'range': [-1, -2, -3], 'allow_neg': True, 'force_neg': True, 'title': "深淵潛航 (負數累加)"},
+            3: {'target': 0, 'range': [-3, -2, -1, 1, 2, 3], 'allow_neg': True, 'title': "物質湮滅 (歸零練習)"},
+            4: {'target': 3, 'range': [-4, -2, 2, 5], 'allow_neg': True, 'title': "混沌平衡 (混合運算)"},
+            5: {'target': -8, 'range': [-5, -3, 2, 4, -9], 'allow_neg': True, 'title': "虛空領主 (高階運算)"}
+        }
+        cfg = config.get(level, config[5])
+        
+        target = cfg['target']
+        hand = []
+        
+        # 確保至少有一組解 (簡單的隨機生成與校驗)
+        current_val = 0
+        steps = 3 + (level // 2)
+        
+        # 逆向生成路徑
+        correct_path = []
+        val = 0
+        for _ in range(steps):
+            # L2 強制只給負數
+            if cfg.get('force_neg'):
+                card_val = random.choice([x for x in cfg['range'] if x < 0])
+            elif not cfg['allow_neg']:
+                card_val = random.choice([x for x in cfg['range'] if x > 0])
+            else:
+                card_val = random.choice(cfg['range'])
+                
+            correct_path.append(IntegerCard(card_val))
+            val += card_val
+            
+        # 設定目標為路徑總和 (除了 L3 固定為 0)
+        if level != 3:
+            target = val
+        else:
+            # L3 特殊處理：確保總和為 0
+            # 如果隨機生成的不是 0，補一張卡讓它歸零
+            if val != 0:
+                correct_path.append(IntegerCard(-val))
+
+        # 加入干擾項
+        distractors = [IntegerCard(random.choice(cfg['range'])) for _ in range(2)]
+        hand = correct_path + distractors
+        random.shuffle(hand)
+        
+        return {"target": target, "hand": hand, "title": cfg['title']}
+
+    @staticmethod
+    def calculate_current(history: List[IntegerCard]) -> int:
+        return sum(card.value for card in history)
+
+    @staticmethod
+    def generate_particle_html(current: int, target: int) -> str:
+        """
+        [Visual Engine] 生成粒子視覺化 HTML
+        核心機制：顯示正負抵銷的過程
+        """
+        html = '<div style="line-height: 24px;">'
+        
+        # 1. 決定顯示的粒子數量
+        # 我們不顯示歷史過程，只顯示「當前狀態」的物理本質
+        # 但為了教學，我們可以顯示 "Net Value" (淨值)
+        
+        net_val = current
+        abs_val = abs(net_val)
+        
+        particles = ""
+        
+        # 為了視覺效果，限制最大顯示數量，避免崩版
+        display_limit = 20
+        
+        if abs_val == 0:
+            particles = '<span style="color:#565f89; font-weight:bold;">∅ (歸零/無電荷)</span>'
+        else:
+            p_class = "p-pos" if net_val > 0 else "p-neg"
+            count = min(abs_val, display_limit)
+            
+            for _ in range(count):
+                particles += f'<div class="particle {p_class}"></div>'
+            
+            if abs_val > display_limit:
+                particles += f' <span style="color:#a9b1d6">...(+{abs_val - display_limit})</span>'
+
+        html += f'<div>{particles}</div>'
+        
+        # 顯示數值標籤
+        color = "#7aa2f7" if net_val > 0 else "#f7768e"
+        if net_val == 0: color = "#9ece6a"
+        
+        sign = "+" if net_val > 0 else ""
+        html += f'<div style="margin-top:10px; font-size:1.5rem; font-weight:bold; color:{color};">{sign}{net_val}</div>'
+        
+        html += '</div>'
+        return html
+
+    @staticmethod
+    def generate_equation_latex(history: List[IntegerCard]) -> str:
+        if not history: return "0"
+        
+        # 生成： 0 + (+5) + (-3) = 2
+        eq_str = "0"
+        for card in history:
+            val = card.value
+            if val >= 0:
+                eq_str += f" + {val}"
+            else:
+                eq_str += f" - {abs(val)}" # 顯示為 - 3 而不是 + (-3) 讓閱讀更直覺，或可選 + (-3)
+                
+        return eq_str
 
 # ==========================================
-# 3. 核心引擎 (Logic Layer - Code-CRF)
+# 4. 狀態管理 (State Management)
 # ==========================================
 
-class GameEngine:
+class GameState:
     def __init__(self):
-        # 路徑依賴 - 初始化狀態確保路徑正確
-        if 'game_state' not in st.session_state:
-            self.reset_game()
-
-    def reset_game(self):
-        st.session_state.level = 1
-        st.session_state.score = 0
+        if 'level' not in st.session_state:
+            self.init_game()
+    
+    def init_game(self):
+        st.session_state.update({
+            'level': 1,
+            'history': [],
+            'game_status': 'playing',
+            'msg': '戰鬥開始！請部署粒子達到目標電荷。',
+            'msg_type': 'neutral'
+        })
         self.start_level(1)
 
-    def start_level(self, level: int):
+    def start_level(self, level):
         st.session_state.level = level
-        
-        # 擁抱混亂 - 增加重試熔斷機制
-        retry_count = 0
-        while retry_count < 10:
-            target, start_val, hand, correct_subset, title = self._generate_math_data(level)
-            if target > 0: # 確保目標合理
-                break
-            retry_count += 1
-        
-        st.session_state.target = target
-        st.session_state.current = start_val
-        st.session_state.hand = hand # 牌庫
-        st.session_state.played_cards = [] # 逆向思維 - 記錄出牌歷史以支持悔棋
-        st.session_state.correct_hand_cache = correct_subset
-        st.session_state.level_title = title
-        st.session_state.game_state = 'playing'
-        st.session_state.msg = f"Level {level}: {title}"
-        st.session_state.feedback_header = "" 
-        st.session_state.math_log = ""
+        data = BattleEngine.generate_level(level)
+        st.session_state.target = data['target']
+        st.session_state.hand = data['hand']
+        st.session_state.level_title = data['title']
+        st.session_state.history = []
+        st.session_state.game_status = 'playing'
+        st.session_state.msg = f"第 {level} 關：{data['title']}"
+        st.session_state.msg_type = 'neutral'
 
-    def _generate_math_data(self, level: int) -> Tuple[Fraction, Fraction, List[Card], List[Card], str]:
-        """
-        難度曲線設計 - 符合認知負荷
-        """
-        target_val = Fraction(0, 1)
-        correct_hand = []
-        allow_negative = False
-        level_title = ""
-        
-        # Lv 1-3: 物理錨定 (同分母 -> 簡單異分母)
-        if level == 1:
-            den_pool, steps, level_title = [2], 2, "暖身：二分之一的世界"
-        elif level == 2:
-            den_pool, steps, level_title = [2, 4], 2, "進階：切蛋糕 (2與4)"
-        elif level == 3:
-            den_pool, steps, level_title = [2, 3, 4, 6], 3, "挑戰：尋找公倍數"
-        # Lv 4+: 負數覺醒 (引入反向向量)
-        elif level == 4:
-            den_pool, steps, allow_negative, level_title = [2, 4], 3, True, "逆向：引入負數 (紅色)"
-        elif level == 5:
-            den_pool, steps, allow_negative, level_title = [2, 5, 10], 3, True, "混合：十進位的直覺"
-        else:
-            den_pool, steps, allow_negative, level_title = [3, 4, 5, 6, 8], 4, True, "大師：極限運算"
-
-        # 生成正確路徑 (Nash Equilibrium - 確保有解)
-        for _ in range(steps):
-            d = random.choice(den_pool)
-            n = random.choice([1, 1, 2])
-            if allow_negative and random.random() < (0.5 if level >= 4 else 0):
-                n = -n
-            card = Card(n, d)
-            correct_hand.append(card)
-            target_val += card.value
-
-        # 混入干擾項 (Entropy)
-        distractors = [Card(random.choice([1, 2]) * (-1 if allow_negative and random.random()<0.4 else 1), random.choice(den_pool)) for _ in range(2)]
-        final_hand = correct_hand + distractors
-        random.shuffle(final_hand)
-        
-        return target_val, Fraction(0, 1), final_hand, correct_hand, level_title
-
-    def play_card(self, card_idx: int):
-        """高內聚的動作處理"""
-        if st.session_state.game_state != 'playing': return
-        
+    def play_card(self, card_idx):
         hand = st.session_state.hand
         if 0 <= card_idx < len(hand):
-            card = hand.pop(card_idx) # 從手牌移除
-            st.session_state.current += card.value
-            st.session_state.played_cards.append(card) # 加入歷史紀錄 (支持 Undo)
-            self._check_win_condition()
+            card = hand.pop(card_idx)
+            st.session_state.history.append(card)
+            self._check_status()
 
-    def undo_last_move(self):
-        """反脆弱 - 允許悔棋，降低錯誤成本"""
-        if st.session_state.played_cards and st.session_state.game_state == 'playing':
-            card = st.session_state.played_cards.pop()
-            st.session_state.current -= card.value
+    def undo(self):
+        if st.session_state.history:
+            card = st.session_state.history.pop()
             st.session_state.hand.append(card)
-            st.session_state.msg = "↩️ 已撤銷上一步"
+            st.session_state.game_status = 'playing'
+            st.session_state.msg = "時光倒流：撤回上一次部署"
+            st.session_state.msg_type = 'neutral'
 
-    def _check_win_condition(self):
-        curr = st.session_state.current
-        tgt = st.session_state.target
-        hand = st.session_state.hand
-        
-        # 臨界質量 - 判斷勝負
-        if curr == tgt:
-            self._trigger_end_game('won')
-        elif curr > tgt:
-            has_negative = any(c.numerator < 0 for c in hand)
-            if not has_negative:
-                self._trigger_end_game('lost_over')
-            else:
-                diff = curr - tgt
-                st.session_state.msg = f"⚠️ 超過 {diff}！快用紅色負數牌修正！"
-        elif not hand:
-            self._trigger_end_game('lost_empty')
-        else:
-            st.session_state.msg = "計算中..."
-
-    def _trigger_end_game(self, status):
-        st.session_state.game_state = status
-        if status == 'won':
-            st.session_state.msg = "🎉 挑戰成功！"
-            st.session_state.feedback_header = "✅ 完美平衡！"
-        elif status == 'lost_over':
-            st.session_state.msg = "💥 爆掉了！"
-            st.session_state.feedback_header = "❌ 超過目標且無法回頭。"
-        elif status == 'lost_empty':
-            st.session_state.msg = "💀 牌用光了！"
-            st.session_state.feedback_header = "❌ 資源耗盡。"
-            
-        # 生成解析日誌
-        self._generate_math_log()
-
-    def _generate_math_log(self):
-        # 這裡簡化生成邏輯，專注於顯示正確組合
-        cards = st.session_state.correct_hand_cache
-        total = sum(c.value for c in cards)
-        steps_html = "<ul>"
-        for c in cards:
-            sign = "-" if c.is_negative else "+"
-            steps_html += f"<li>{c.numerator}/{c.denominator} ({sign})</li>"
-        steps_html += f"<li><b>總和: {total}</b></li></ul>"
-        
-        st.session_state.math_log = f"""
-        <div class="math-log">
-            <b>💡 最佳解法 (Nash Equilibrium):</b><br>
-            目標: {st.session_state.target}<br>
-            組合: {steps_html}
-        </div>
-        """
-
-    def next_level(self):
-        self.start_level(st.session_state.level + 1)
-
-    def retry_level(self):
+    def retry(self):
         self.start_level(st.session_state.level)
 
+    def _check_status(self):
+        current = BattleEngine.calculate_current(st.session_state.history)
+        target = st.session_state.target
+        
+        if current == target:
+            st.session_state.game_status = 'won'
+            st.session_state.msg = "✨ 目標達成！電荷平衡！"
+            st.session_state.msg_type = 'success'
+        elif not st.session_state.hand:
+            st.session_state.game_status = 'lost'
+            st.session_state.msg = "🌑 能量耗盡，任務失敗。"
+            st.session_state.msg_type = 'error'
+        else:
+            # 鷹架回饋 (Scaffolding)
+            diff = target - current
+            if diff > 0:
+                st.session_state.msg = f"📉 能量不足：還差 +{diff} (需要藍色粒子)"
+                st.session_state.msg_type = 'warn'
+            elif diff < 0:
+                st.session_state.msg = f"📈 能量過載：超過 +{abs(diff)} (需要紅色粒子抵銷)"
+                st.session_state.msg_type = 'warn'
+            else:
+                st.session_state.msg = "運算中..."
+
+    def next_level(self):
+        if st.session_state.level >= MAX_LEVEL:
+            st.session_state.game_status = 'completed'
+        else:
+            self.start_level(st.session_state.level + 1)
+            
+    def restart_game(self):
+        self.init_game()
+
 # ==========================================
-# 4. UI 渲染層 (View Renderer)
+# 5. UI 呈現層 (View Layer)
 # ==========================================
 
-def render_progress_bar(current: Fraction, target: Fraction):
-    # 視覺化 - 向量進度條
-    if target == 0: target = Fraction(1,1)
-    max_val = max(target * Fraction(3, 2), Fraction(2, 1)) # 動態最大值
+def main():
+    game = GameState()
     
-    curr_pct = float(current / max_val) * 100
-    tgt_pct = float(target / max_val) * 100
-    
-    fill_class = "fill-normal"
-    if current > target: fill_class = "fill-warning" # 基礎比率警告
-    
-    st.markdown(f"""
-    <div class="game-container">
-        <div style="display: flex; justify-content: space-between; font-family: monospace; margin-bottom:5px;">
-            <span>🏁 0</span>
-            <span style="color: #a6e3a1; font-weight:bold;">目標: {target}</span>
-        </div>
-        <div class="progress-track">
-            <div class="target-line" style="left: {tgt_pct}%;"></div>
-            <div class="progress-fill {fill_class}" style="width: {max(0, min(curr_pct, 100))}%;">
-                {current}
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ==========================================
-# 5. 主程式 (Main Loop)
-# ==========================================
-
-engine = GameEngine()
-
-st.title(f"🧩 分數拼湊大作戰")
-st.caption(f"Level {st.session_state.get('level', 1)}: {st.session_state.get('level_title', '')}")
-
-# 狀態訊息區
-st.info(st.session_state.get('msg', '歡迎回來'))
-
-# 渲染進度條
-render_progress_bar(st.session_state.get('current', Fraction(0,1)), st.session_state.get('target', Fraction(1,1)))
-
-# 遊戲互動區
-if st.session_state.game_state == 'playing':
-    st.write("### 🎴 出牌 (點擊卡片)")
-    
-    hand = st.session_state.get('hand', [])
-    if hand:
-        cols = st.columns(4) # 限制每行 4 張，避免過擠
-        for i, card in enumerate(hand):
-            with cols[i % 4]:
-                # 第一性原理 - 按鈕內包含視覺化 HTML
-                # 注意：Streamlit 按鈕不支援複雜 HTML，這裡我們用圖像化的文字替代，或使用 st.markdown 模擬
-                # 為了穩定性，這裡使用優化過的文字標籤，但在 CSS 中我們增強了樣式
-                if st.button(f"{card.numerator}/{card.denominator}", key=f"card_{card.id}", use_container_width=True):
-                    engine.play_card(i)
-                    st.rerun()
-                # 在按鈕下方顯示圓餅圖 (Visual Aid)
-                st.markdown(card.get_visual_html(), unsafe_allow_html=True)
-    else:
-        st.warning("手牌已空")
-    
-    st.divider()
-    # 反脆弱 - 悔棋按鈕
-    if st.session_state.get('played_cards'):
-        if st.button("↩️ 悔棋 (Undo)", help="撤銷上一步操作"):
-            engine.undo_last_move()
-            st.rerun()
-
-else:
-    # 結算畫面
-    st.markdown("---")
-    if st.session_state.game_state == 'won':
-        st.success(st.session_state.feedback_header)
-        st.balloons()
-    else:
-        st.error(st.session_state.feedback_header)
-    
-    st.markdown(st.session_state.math_log, unsafe_allow_html=True)
-    
-    c1, c2 = st.columns(2)
+    # --- Top Bar ---
+    c1, c2 = st.columns([3, 1])
     with c1:
-        if st.button("🔄 重試本關 (Retry)", use_container_width=True):
-            engine.retry_level()
-            st.rerun()
+        st.title("⚔️ 整數大對決")
     with c2:
-        if st.session_state.game_state == 'won':
-            if st.button("🚀 下一關 (Next Level)", type="primary", use_container_width=True):
-                engine.next_level()
+        if st.button("🔄 重置戰局"):
+            game.restart_game()
+            st.rerun()
+
+    progress = st.session_state.level / MAX_LEVEL
+    st.progress(progress)
+    st.caption(f"Level {st.session_state.level}/{MAX_LEVEL}: {st.session_state.get('level_title', '')}")
+
+    # --- Game Completed ---
+    if st.session_state.game_status == 'completed':
+        st.balloons()
+        st.markdown("""
+        <div style="background:linear-gradient(135deg,#7aa2f7,#3d59a1);padding:30px;border-radius:15px;text-align:center;color:white;">
+            <h1>🏆 歸零大師！</h1>
+            <p>你已參透正負數抵銷的物理法則。</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("🎓 開啟新一輪試煉", use_container_width=True):
+            game.restart_game()
+            st.rerun()
+        return
+
+    # --- Dashboard (Target vs Current) ---
+    target = st.session_state.target
+    current = BattleEngine.calculate_current(st.session_state.history)
+    
+    col_tgt, col_mid, col_cur = st.columns([1, 0.2, 1])
+    
+    with col_tgt:
+        # 目標顯示
+        t_color = "#7aa2f7" if target > 0 else "#f7768e"
+        if target == 0: t_color = "#9ece6a"
+        t_sign = "+" if target > 0 else ""
+        st.markdown(f"<div style='text-align:center;color:#565f89;font-size:0.9rem;'>目標電荷</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:center;font-size:2rem;font-weight:bold;color:{t_color}'>{t_sign}{target}</div>", unsafe_allow_html=True)
+        
+    with col_mid:
+        status_icon = "VS"
+        if current == target: status_icon = "✅"
+        elif st.session_state.game_status == 'lost': status_icon = "💀"
+        st.markdown(f"<div style='text-align:center;font-size:1.5rem;padding-top:15px;color:#a9b1d6'>{status_icon}</div>", unsafe_allow_html=True)
+        
+    with col_cur:
+        # 當前顯示 (純數值，視覺化在下方)
+        c_sign = "+" if current > 0 else ""
+        st.markdown(f"<div style='text-align:center;color:#565f89;font-size:0.9rem;'>當前電荷</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:center;font-size:2rem;font-weight:bold;color:#c0caf5'>{c_sign}{current}</div>", unsafe_allow_html=True)
+
+    # --- Status Message ---
+    msg_cls = f"status-{st.session_state.msg_type}"
+    st.markdown(f'<div class="status-box {msg_cls}">{st.session_state.msg}</div>', unsafe_allow_html=True)
+
+    # --- Battlefield (Visualizer) ---
+    st.markdown("**⚛️ 粒子反應爐：**")
+    
+    # 生成粒子 HTML
+    particle_html = BattleEngine.generate_particle_html(current, target)
+    st.markdown(f'<div class="battlefield-box">{particle_html}</div>', unsafe_allow_html=True)
+    
+    # 顯示算式
+    latex_eq = BattleEngine.generate_equation_latex(st.session_state.history)
+    st.markdown(f'<div class="math-display">{latex_eq} = {current}</div>', unsafe_allow_html=True)
+
+    # --- Control Area ---
+    if st.session_state.game_status == 'playing':
+        st.write("👇 部署粒子：")
+        hand = st.session_state.hand
+        
+        if hand:
+            # 自定義 CSS 讓按鈕變色 (Streamlit 按鈕顏色難以直接控制，這裡依賴 Global CSS 對 Emoji 的潛在渲染或接受統一色調)
+            # 在 Streamlit 中，我們可以用 columns 來排列
+            cols = st.columns(4)
+            for i, card in enumerate(hand):
+                with cols[i % 4]:
+                    # 使用 type="primary" 為正數 (通常是強調色)，secondary 為負數 (預設色)
+                    # 或是統一顏色，靠文字區分
+                    btn_type = "primary" if card.value > 0 else "secondary"
+                    
+                    if st.button(card.display_text, key=f"card_{card.id}", type=btn_type, use_container_width=True):
+                        game.play_card(i)
+                        st.rerun()
+        
+        if st.session_state.history:
+            st.markdown("---")
+            if st.button("↩️ 撤回 (Undo)"):
+                game.undo()
                 st.rerun()
 
-# 側邊欄：教育指引
-with st.sidebar:
-    st.markdown("### 📘 戰術指南")
-    st.markdown("""
-    * **圓餅圖** 代表分數的大小 (第一性原理)。
-    * **紅色** 代表負數，會讓進度條倒退。
-    * **目標線 (綠色)** 是你必須精準停靠的地方。
-    * 若不小心算錯，隨時可以使用 **悔棋**。
-    """)
-    st.progress(min(st.session_state.level / 10, 1.0))
+    # --- Result Actions ---
+    elif st.session_state.game_status == 'won':
+        if st.button("🚀 前往下一戰場", type="primary", use_container_width=True):
+            game.next_level()
+            st.rerun()
+            
+    elif st.session_state.game_status == 'lost':
+        if st.button("💥 重啟反應爐 (Retry)", type="primary", use_container_width=True):
+            game.retry()
+            st.rerun()
+
+if __name__ == "__main__":
+    main()
