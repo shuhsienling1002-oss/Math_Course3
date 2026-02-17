@@ -7,38 +7,36 @@ from typing import List, Dict
 # ==========================================
 # 0. 全局設定 (Global Config)
 # ==========================================
-MAX_LEVEL = 5
+MAX_LEVEL = 10  # 擴展至 10 關
 
 # ==========================================
-# 1. 核心配置與 CSS (High Contrast Fix)
+# 1. 核心配置與 CSS (High Contrast Dark Mode)
 # ==========================================
 st.set_page_config(
-    page_title="整數大對決：歸零之戰 v2.1",
+    page_title="整數大對決：歸零之戰 v3.0",
     page_icon="⚔️",
     layout="centered"
 )
 
 st.markdown("""
 <style>
-    /* [FIX] 全局背景改為更深的午夜藍，文字改為高亮白 */
+    /* 全局背景與文字 */
     .stApp { background-color: #020617; color: #f8fafc; }
     
-    /* 頂部進度條 */
+    /* 進度條 */
     .stProgress > div > div > div > div {
         background-color: #60a5fa;
     }
-    
-    /* [FIX] 說明文字 (Caption) 強制增亮 */
     .stCaption { color: #94a3b8 !important; font-size: 1rem !important; }
 
-    /* 戰場容器 (Visualizer) */
+    /* 戰場容器 */
     .battlefield-box {
-        background: #0f172a; /* 更深的背景 */
+        background: #0f172a;
         border: 2px solid #334155;
         border-radius: 12px;
         padding: 20px;
         margin: 15px 0;
-        box-shadow: 0 0 15px rgba(0,0,0,0.8); /* 增加陰影對比 */
+        box-shadow: 0 0 15px rgba(0,0,0,0.8);
         text-align: center;
         min-height: 120px;
         display: flex;
@@ -47,33 +45,32 @@ st.markdown("""
         justify-content: center;
     }
 
-    /* 粒子樣式 - 增加光暈邊框使其在深色背景更明顯 */
+    /* 粒子樣式 */
     .particle {
         display: inline-block;
-        width: 24px; /* 稍微加大 */
-        height: 24px;
+        width: 22px;
+        height: 22px;
         border-radius: 50%;
-        margin: 3px;
+        margin: 2px;
         box-shadow: 0 0 8px rgba(255,255,255,0.2);
         transition: all 0.3s ease;
     }
-    .p-pos { background: #3b82f6; border: 2px solid #93c5fd; } /* 亮藍配淺藍邊 */
-    .p-neg { background: #ef4444; border: 2px solid #fca5a5; } /* 亮紅配淺紅邊 */
-    .p-zero { background: #475569; border: 1px dashed #94a3b8; opacity: 0.5; }
-
-    /* 卡牌按鈕 - 字體加粗增亮 */
+    .p-pos { background: #3b82f6; border: 2px solid #93c5fd; } /* 藍 */
+    .p-neg { background: #ef4444; border: 2px solid #fca5a5; } /* 紅 */
+    
+    /* 按鈕優化 */
     div.stButton > button {
         border-radius: 10px !important;
         font-family: 'Courier New', monospace !important;
-        font-size: 1.3rem !important;
-        font-weight: 900 !important; /* 特粗體 */
+        font-size: 1.2rem !important;
+        font-weight: 900 !important;
         border: 1px solid rgba(255,255,255,0.1) !important;
         color: #ffffff !important;
         text-shadow: 0 1px 2px rgba(0,0,0,0.5);
     }
     div.stButton > button:active { transform: scale(0.96); }
-    
-    /* 狀態提示框 - 增加背景不透明度以提升文字可讀性 */
+
+    /* 狀態提示框 */
     .status-box {
         padding: 15px;
         border-radius: 10px;
@@ -81,7 +78,7 @@ st.markdown("""
         font-weight: bold;
         font-size: 1.1rem;
         margin-bottom: 15px;
-        color: #ffffff; /* 強制白字 */
+        color: #ffffff;
         text-shadow: 0 1px 2px rgba(0,0,0,0.5);
     }
     .status-neutral { background: #1e293b; border: 1px solid #60a5fa; color: #60a5fa; }
@@ -89,31 +86,22 @@ st.markdown("""
     .status-error { background: #450a0a; border: 1px solid #f87171; color: #fca5a5; }
     .status-success { background: #052e16; border: 1px solid #4ade80; color: #4ade80; }
 
-    /* [FIX] 數學公式顯示 - 黑底亮字，對比度最大化 */
+    /* 數學顯示 */
     .math-display {
-        font-size: 1.8rem;
+        font-size: 1.6rem;
         font-family: monospace;
-        color: #ffffff; /* 純白 */
-        background: #000000; /* 純黑背景 */
-        padding: 15px;
+        color: #ffffff;
+        background: #000000;
+        padding: 12px;
         border-radius: 8px;
         border: 1px solid #334155;
         border-left: 6px solid #a855f7;
         margin-top: 10px;
     }
     
-    /* 數據標籤優化 */
-    .label-text {
-        color: #cbd5e1; /* 亮灰 */
-        font-size: 1rem;
-        margin-bottom: 5px;
-        font-weight: bold;
-    }
-    .value-text {
-        font-size: 2.5rem;
-        font-weight: 900;
-        text-shadow: 0 0 10px rgba(0,0,0,0.5);
-    }
+    /* 數據標籤 */
+    .label-text { color: #cbd5e1; font-size: 0.9rem; margin-bottom: 5px; font-weight: bold; }
+    .value-text { font-size: 2.2rem; font-weight: 900; text-shadow: 0 0 10px rgba(0,0,0,0.5); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -132,7 +120,7 @@ class IntegerCard:
         if self.value > 0:
             return f"🔵 +{self.value}"
         else:
-            return f"🔴 {self.value}" # 負數自帶負號
+            return f"🔴 {self.value}"
 
 # ==========================================
 # 3. 戰鬥引擎 (Logic Layer)
@@ -142,41 +130,69 @@ class BattleEngine:
     
     @staticmethod
     def generate_level(level: int) -> dict:
+        """
+        10關循序漸進設計：
+        1. 正數加法 (基礎)
+        2. 負數加法 (方向感)
+        3. 簡單抵銷 (歸零入門)
+        4. 正數目標 (混合運算)
+        5. 負數目標 (混合運算)
+        6. 中型數字 (擴大範圍)
+        7. 歸零挑戰 (多步抵銷)
+        8. 三步運算 (策略組合)
+        9. 大型數字 (複雜混合)
+        10. 最終試煉 (高精度)
+        """
         config = {
-            1: {'target': 5, 'range': [1, 2, 3], 'allow_neg': False, 'title': "Level 1: 能量填充 (正數加法)"},
-            2: {'target': -5, 'range': [-1, -2, -3], 'allow_neg': True, 'force_neg': True, 'title': "Level 2: 深淵潛航 (負數累加)"},
-            3: {'target': 0, 'range': [-3, -2, -1, 1, 2, 3], 'allow_neg': True, 'title': "Level 3: 物質湮滅 (歸零練習)"},
-            4: {'target': 3, 'range': [-4, -2, 2, 5], 'allow_neg': True, 'title': "Level 4: 混沌平衡 (混合運算)"},
-            5: {'target': -8, 'range': [-5, -3, 2, 4, -9], 'allow_neg': True, 'title': "Level 5: 虛空領主 (高階運算)"}
+            1: {'range': [1, 2, 3], 'type': 'pos_only', 'steps': 2, 'title': "L1: 能量填充 (正數)"},
+            2: {'range': [-1, -2, -3], 'type': 'neg_only', 'steps': 2, 'title': "L2: 深淵潛航 (負數)"},
+            3: {'range': [-1, 1], 'type': 'zero', 'steps': 2, 'title': "L3: 物質湮滅 (歸零)"},
+            4: {'range': [-2, -1, 1, 2, 3], 'type': 'mixed_pos', 'steps': 3, 'title': "L4: 混沌平衡 I (偏正)"},
+            5: {'range': [-3, -2, -1, 1, 2], 'type': 'mixed_neg', 'steps': 3, 'title': "L5: 混沌平衡 II (偏負)"},
+            6: {'range': [2, 3, 4, 5], 'type': 'pos_mid', 'steps': 3, 'title': "L6: 能量過載 (進階加法)"},
+            7: {'range': [-5, -3, 3, 5], 'type': 'zero_mid', 'steps': 4, 'title': "L7: 虛空迴路 (進階歸零)"},
+            8: {'range': [-4, -2, 3, 6], 'type': 'mixed_step3', 'steps': 3, 'title': "L8: 三重奏 (策略運算)"},
+            9: {'range': [-8, -5, 4, 7, 9], 'type': 'chaos', 'steps': 4, 'title': "L9: 亂流風暴 (大數混合)"},
+            10: {'range': [-10, -7, -3, 5, 8, 12], 'type': 'boss', 'steps': 5, 'title': "L10: 虛空領主 (最終試煉)"}
         }
-        cfg = config.get(level, config[5])
+        cfg = config.get(level, config[10])
         
-        target = cfg['target']
-        hand = []
-        
-        # 確保至少有一組解
-        steps = 3 + (level // 2)
+        # --- 動態生成邏輯 (保證有解) ---
         correct_path = []
-        val = 0
+        current_sum = 0
         
-        for _ in range(steps):
-            if cfg.get('force_neg'):
-                card_val = random.choice([x for x in cfg['range'] if x < 0])
-            elif not cfg['allow_neg']:
-                card_val = random.choice([x for x in cfg['range'] if x > 0])
-            else:
-                card_val = random.choice(cfg['range'])
-                
-            correct_path.append(IntegerCard(card_val))
-            val += card_val
+        # 1. 生成正確路徑
+        for _ in range(cfg['steps']):
+            # 根據類型篩選候選數字
+            pool = cfg['range']
+            if cfg['type'] == 'pos_only':
+                pool = [x for x in pool if x > 0]
+            elif cfg['type'] == 'neg_only':
+                pool = [x for x in pool if x < 0]
             
-        if level != 3:
-            target = val
-        else:
-            if val != 0:
-                correct_path.append(IntegerCard(-val))
-
-        distractors = [IntegerCard(random.choice(cfg['range'])) for _ in range(2)]
+            val = random.choice(pool)
+            correct_path.append(IntegerCard(val))
+            current_sum += val
+            
+        # 2. 設定目標 (L3/L7 強制歸零)
+        target = current_sum
+        if 'zero' in cfg['type']:
+            # 如果隨機沒歸零，補一張卡讓它歸零，並把這張卡加入手牌
+            if current_sum != 0:
+                fix_card = IntegerCard(-current_sum)
+                correct_path.append(fix_card)
+                target = 0
+        
+        # 3. 混入干擾項 (Distractors)
+        # 難度越高，干擾項越多
+        distractor_count = 2
+        if level >= 6: distractor_count = 3
+        if level >= 9: distractor_count = 4
+        
+        distractors = []
+        for _ in range(distractor_count):
+            distractors.append(IntegerCard(random.choice(cfg['range'])))
+            
         hand = correct_path + distractors
         random.shuffle(hand)
         
@@ -188,13 +204,14 @@ class BattleEngine:
 
     @staticmethod
     def generate_particle_html(current: int, target: int) -> str:
-        """[Visual Engine] 生成高對比度粒子"""
-        html = '<div style="line-height: 30px;">'
+        """[Visual Engine] 粒子視覺化"""
+        html = '<div style="line-height: 28px;">'
         
         net_val = current
         abs_val = abs(net_val)
         particles = ""
-        display_limit = 18
+        # 隨等級增加顯示上限，避免 L10 炸版
+        display_limit = 20 
         
         if abs_val == 0:
             particles = '<span style="color:#94a3b8; font-weight:bold; font-size:1.2rem;">∅ (歸零/無電荷)</span>'
@@ -288,7 +305,7 @@ class GameState:
             diff = target - current
             if diff > 0:
                 st.session_state.msg = f"📉 能量不足：還差 +{diff} (需要藍色)"
-                st.session_state.msg_type = 'neutral' # 改為中性色避免過度焦慮
+                st.session_state.msg_type = 'neutral'
             elif diff < 0:
                 st.session_state.msg = f"📈 能量過載：超過 +{abs(diff)} (需要紅色抵銷)"
                 st.session_state.msg_type = 'warn'
@@ -331,6 +348,7 @@ def main():
         <div style="background:#0f172a; border:2px solid #fbbf24; padding:30px; border-radius:15px; text-align:center; color:white;">
             <h1 style="color:#fbbf24;">🏆 傳奇誕生！</h1>
             <p style="font-size:1.2rem;">你已完全掌握正負數抵銷的法則。</p>
+            <p>10 層試煉全部通關！</p>
         </div>
         """, unsafe_allow_html=True)
         if st.button("🎓 開啟新一輪試煉", use_container_width=True):
@@ -345,9 +363,9 @@ def main():
     col_tgt, col_mid, col_cur = st.columns([1, 0.2, 1])
     
     with col_tgt:
-        # [FIX] 顏色改為高亮螢光色
-        t_color = "#60a5fa" if target > 0 else "#f87171" # 亮藍 vs 亮紅
-        if target == 0: t_color = "#a3e635" # 萊姆綠
+        # 顏色邏輯：亮藍(正) / 亮紅(負) / 萊姆綠(零)
+        t_color = "#60a5fa" if target > 0 else "#f87171"
+        if target == 0: t_color = "#a3e635"
         t_sign = "+" if target > 0 else ""
         
         st.markdown(f"<div class='label-text' style='text-align:center;'>目標電荷</div>", unsafe_allow_html=True)
@@ -372,12 +390,11 @@ def main():
     msg_cls = f"status-{st.session_state.msg_type}"
     st.markdown(f'<div class="status-box {msg_cls}">{st.session_state.msg}</div>', unsafe_allow_html=True)
 
-    # --- Battlefield (Visualizer) ---
+    # --- Battlefield ---
     st.markdown("**⚛️ 粒子反應爐：**")
     particle_html = BattleEngine.generate_particle_html(current, target)
     st.markdown(f'<div class="battlefield-box">{particle_html}</div>', unsafe_allow_html=True)
     
-    # [FIX] 數學公式黑底白字
     latex_eq = BattleEngine.generate_equation_latex(st.session_state.history)
     st.markdown(f'<div class="math-display">{latex_eq} = {current}</div>', unsafe_allow_html=True)
 
@@ -390,8 +407,6 @@ def main():
             cols = st.columns(4)
             for i, card in enumerate(hand):
                 with cols[i % 4]:
-                    # 使用 type="primary" 來凸顯按鈕，Streamlit 會自動調整為主題色
-                    # 但因為我們改了 CSS，這裡主要是為了結構
                     btn_type = "primary" if card.value > 0 else "secondary"
                     if st.button(card.display_text, key=f"card_{card.id}", type=btn_type, use_container_width=True):
                         game.play_card(i)
